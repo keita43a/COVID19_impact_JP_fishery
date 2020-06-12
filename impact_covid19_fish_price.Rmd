@@ -1,0 +1,121 @@
+---
+title: "COVID19の漁業に対する影響"
+author: "Keita Abe"
+date: "`r Sys.Date()`"
+output:
+  minidown::mini_document:
+    framework: water
+    theme: light
+    toc: true
+    toc_float: true
+    code_folding:
+      source: hide
+      output: show
+      message: hide
+      warning: hide
+      error: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+pacman::p_load(tidyverse,
+               lubridate,
+               viridis,
+               readxl)
+
+dat2 = read_csv("monthly_landing_market_aggregate_201001_202004.csv")
+# data is downloaded and compiled in "draft_data_dl.R"
+
+```
+
+# データ
+
+まず産地市場における影響を調査するため、水産物流通調査(http://www.market.jafic.or.jp/index.html)から産地水産物のデータを取得した。データは月毎の主要漁港における主要魚種の水揚げ量と平均価格を含んでいる。
+
+輸出入に対する影響を調査するために貿易統計を、漁業者の反応を見るためにGFWを使う予定。
+
+
+# 産地市場における影響
+
+## 日本全体
+
+### 価格への影響
+
+```{r plot_price}
+# plot price change  
+
+ggplot(dat2 %>% filter(year == 2020),
+       aes(x = price_kg_rel_year_mon*100, y = species, col = factor(month))) + 
+  geom_point() + 
+  geom_vline(xintercept = 100, col = "red", alpha= 0.7) +
+  xlim(0,200) + 
+  scale_color_viridis(discrete=TRUE) +
+  labs(x = "単価の前年同月比 (%)", y="魚種項目", col = "月(2020年)") + 
+  theme(legend.position = "bottom",
+        text = element_text(family = "HiraKakuPro-W3"))  
+
+ggplot(dat2 %>% filter(year == 2019 & month <= 4),
+       aes(x = price_kg_rel_year_mon*100, y = species, col = factor(month))) + 
+  geom_point() + 
+  geom_vline(xintercept = 100, col = "red", alpha = 0.7) +
+  xlim(0,200) + 
+  scale_color_viridis(discrete=TRUE) +
+  labs(x = "単価の前年同月比 (%)", y="魚種項目", col = "月(2019年)") + 
+  theme(legend.position = "bottom",
+        text = element_text(family = "HiraKakuPro-W3"),
+        plot.background = element_blank())  
+
+# distribution
+ggplot(dat2 %>% filter(month <= 4),
+       aes(x = price_kg_rel_year_mon*100, group = year ,color = (year == 2020))) +
+  geom_density(alpha = 0.7,position = "identity") + 
+  xlim(0,200) + 
+  scale_color_discrete(label = c("2019年以前","2020年")) + 
+  labs(x = "単価の前年同月比 (%)",y = "密度",color = "年", title = "各年の前年同月比分布",
+       subtitle = "単価：1月から４月") + 
+  theme(legend.position = "bottom",
+        text = element_text(family = "HiraKakuPro-W3"),
+        plot.background = element_blank())  
+
+```
+
+### 水揚げ量への影響
+
+```{r plot_land}
+# landing
+
+ggplot(dat2 %>% filter(year == 2020),
+       aes(x = landing_t_rel_year_mon*100, y = species, col = factor(month))) + 
+  geom_point() + 
+  geom_vline(xintercept = 100, col = "red", alpha= 0.7) +
+  scale_color_viridis(discrete=TRUE) +
+  labs(x = "水揚げ量の前年同月比 (%)", y="魚種項目", col = "月(2020年)") + 
+  xlim(0,200) + 
+  theme(legend.position = "bottom",
+        text = element_text(family = "HiraKakuPro-W3")) 
+
+  
+ggplot(dat2 %>% filter(year == 2019 & month <= 4),
+       aes(x = landing_t_rel_year_mon*100, y = species, col = factor(month))) + 
+  geom_point() + 
+  geom_vline(xintercept = 100, col = "red", alpha= 0.7) +
+  labs(x = "水揚げ量の前年同月比 (%)", y="魚種項目", col = "月(2019年)") + 
+  scale_color_viridis(discrete=TRUE) +
+  xlim(0,200) + 
+  theme(legend.position = "bottom",
+        text = element_text(family = "HiraKakuPro-W3"))  
+
+# distribution
+ggplot(dat2 %>% filter(month <= 4),
+       aes(x = landing_t_rel_year_mon*100, group = year ,color = (year == 2020))) +
+  geom_density(alpha = 0.7,position = "identity") + 
+  xlim(0,200) + 
+  scale_color_discrete(label = c("2019年以前","2020年")) + 
+  labs(x = "水揚げ量の前年同月比 (%)",y = "密度",color = "年", title = "各年の前年同月比分布",
+       subtitle = "水揚げ量: 1月から４月") + 
+  theme(legend.position = "bottom",
+        text = element_text(family = "HiraKakuPro-W3"),
+        plot.background = element_blank()) 
+```
+
