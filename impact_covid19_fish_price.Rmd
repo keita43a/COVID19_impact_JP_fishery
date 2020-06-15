@@ -22,7 +22,12 @@ knitr::opts_chunk$set(echo = TRUE)
 pacman::p_load(tidyverse,
                lubridate,
                viridis,
-               readxl)
+               readxl,
+               ggridges)
+
+fig_size <- function(width, heigth){
+     options(repr.plot.width = width, repr.plot.height = heigth)
+}
 
 dat2 = read_csv("monthly_landing_market_aggregate_201001_202004.csv")
 # data is downloaded and compiled in "draft_data_dl.R"
@@ -119,3 +124,141 @@ ggplot(dat2 %>% filter(month <= 4),
         plot.background = element_blank()) 
 ```
 
+## 漁港市場別
+
+```{r dat_port2}
+dat_port2 = read_csv("monthly_landing_market_by_port_201001_202004.csv") %>%
+  # ratio relative to previous month
+  arrange(port,species,date) %>%
+  group_by(port,species) %>%
+  mutate(across(c(landing_t,price_kg), ~.x/lag(.x,1), .names = "{col}_rel_prev_mon")) %>%
+  ungroup() %>%
+  # ratio relative to same month previous year
+  arrange(port,species,month,year) %>%
+  group_by(port,species,month) %>%
+  mutate(across(c(landing_t,price_kg), ~.x/lag(.x,1), .names = "{col}_rel_year_mon")) %>%
+  ungroup() %>%
+  arrange(port,species,date) %>%
+  # if NaN or infinity, convert to zero. 
+  mutate(across(starts_with("landing_t") | starts_with("price_kg"),~ifelse(is.nan(.x) | is.infinite(.x), NA, .x))) %>%
+  # year dummy
+  mutate(yr20 = ifelse(year == 2020,1,0),
+         rev = landing_t*price_kg) # 1000 JPY
+```
+
+
+### 価格への影響
+
+####　漁港別 
+
+特に北日本で大きな影響があるか？
+
+```{r, fig.width=6, fig.height=10,}
+
+ggplot(dat_port2 %>% filter(month %in% c(1:4)), aes(x = price_kg_rel_year_mon*100, y = reorder(port, -port_code), fill = factor(yr20))) +
+  geom_density_ridges(alpha = 0.5) + 
+  xlim(0,200) + 
+  scale_fill_viridis_d(label = c("2019 and before","2020")) +
+  labs(title = "単価の前年同月比", subtitle= "漁港別",
+       x = "単価の前年同月比 (%)", y = "主要漁港", fill = "年") +
+  theme_bw() +
+  theme(text = element_text(family = "HiraKakuPro-W3"))
+
+```
+
+####　魚種別
+
+```{r, fig.width=6, fig.height=10,}
+
+ggplot(dat_port2 %>% filter(month %in% c(1:4)), aes(x = price_kg_rel_year_mon*100, y = species, fill = factor(yr20))) +
+  geom_density_ridges(alpha = 0.5) + 
+  xlim(0,200) + 
+  scale_fill_viridis_d(label = c("2019 and before","2020")) +
+  labs(title = "単価の前年同月比", subtitle= "魚種別",
+       x = "単価の前年同月比 (%)", y = "魚種", fill = "年") +
+  theme_bw() +
+  theme(text = element_text(family = "HiraKakuPro-W3"))
+
+```
+
+### 水揚げ量への影響
+
+####　漁港別 
+
+データポイントが年-魚種。
+
+```{r, fig.width=6, fig.height=10,}
+
+ggplot(dat_port2 %>% filter(month %in% c(1:4)), aes(x = landing_t_rel_year_mon*100, y = reorder(port,-port_code), fill = factor(yr20))) +
+  geom_density_ridges(alpha = 0.5) + 
+  xlim(0,200) + 
+  scale_fill_viridis_d(label = c("2019 and before","2020")) +
+  labs(title = "水揚げ量の前年同月比", subtitle= "漁港別",
+       x = "水揚げ量の前年同月比 (%)", y = "主要漁港", fill = "年") +
+  theme_bw() +
+  theme(text = element_text(family = "HiraKakuPro-W3"))
+
+```
+
+####　魚種別
+
+データポイントが年-漁港。
+
+```{r, fig.width=6, fig.height=10,}
+
+ggplot(dat_port2 %>% filter(month %in% c(1:4)), aes(x = landing_t_rel_year_mon*100, y = species, fill = factor(yr20))) +
+  geom_density_ridges(alpha = 0.5) + 
+  xlim(0,200) + 
+  scale_fill_viridis_d(label = c("2019 and before","2020")) +
+  labs(title = "水揚げ量の前年同月比", subtitle= "魚種別",
+       x = "水揚げ量の前年同月比 (%)", y = "魚種", fill = "年") +
+  theme_bw() +
+  theme(text = element_text(family = "HiraKakuPro-W3"))
+
+```
+
+### 水揚げ高への影響
+
+#### 月毎の水揚げ高の年比較
+
+```{r}
+dat_port3 = dat_port2 %>%
+  group_by(port,year,month) %>%
+  summarise(landing_t_tot = sum(landing_t,na.rm =TRUE),
+            price_kg_mean = mean(price_kg, na.rm = TRUE),
+            price_kg_sd = sd(price_kg,na.rm = TRUE),
+            rev_1000JPY = sum(landing_t*price_kg,na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(yr20 = ifelse(year == 2020, 1, 0))
+```
+
+
+```{r, fig.width=8, fig.height=12}
+
+ggplot(dat_port3 %>% filter(month %in% c(1:4)), 
+       aes(x = rev_1000JPY, y = port, col = factor(yr20))) +
+  geom_point(alpha = 0.7, size = 3) + 
+  # xlim(0,200) + 
+  scale_color_discrete(limits = c(1,0),label = c("2020","2019 and before")) +
+  labs(title = "漁港別水揚げ高", subtitle= "1-4月",
+       x = "漁獲高(千円)", y = "主要漁港", col = "年") +
+  theme_bw() +
+  theme(text = element_text(family = "HiraKakuPro-W3")) + 
+  facet_wrap(~month)
+
+```
+
+
+## 研究課題
+
+- 具体的にどこでどの程度、どんな魚種が影響を受けたか？
+- 何が原因と考えられるか？国内需要の変化？輸出ショック？　
+- 輸入ショックによる価格増加はあるか？
+- 漁獲の多様性とCOVIDショックに対する頑健性に相関はあるか？
+
+### 使えそうなデータ
+
+- 貿易統計(輸出入)
+- 外食需要
+- デパートの売り上げ（高級魚の需要がありそう
+- スーパーの売り上げ（商業動態統計で取れそう）

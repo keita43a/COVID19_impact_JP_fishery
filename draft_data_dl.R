@@ -163,7 +163,11 @@ dat_port2 = dat_port %>%
          "price_kg" = "価格") %>%
   mutate(date = ceiling_date(as.Date(paste(year,month,15,sep = "-")), "month") - days(1)) %>%
   relocate(year,month,date) %>%
-  mutate(across(c(landing_t,price_kg),as.numeric))
+  mutate(across(c(landing_t,price_kg),as.numeric)) %>%
+  # fix names of port based on code
+  mutate(port = ifelse(port_code == 23, "勝浦(千葉)", 
+                       ifelse(port_code == 31, "勝浦(和歌山)",port))) %>%
+  filter(!is.na(port))
   
 
 write_csv(dat_port2, "monthly_landing_market_by_port_201001_202004.csv")
