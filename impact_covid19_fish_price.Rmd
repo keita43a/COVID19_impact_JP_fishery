@@ -83,6 +83,20 @@ ggplot(dat2 %>% filter(month <= 4),
         text = element_text(family = "HiraKakuPro-W3"),
         plot.background = element_blank())  
 
+
+# distribution
+ggplot(dat2 %>% filter(month <= 4),
+       aes(x = price_kg_rel_year_mon*100, group = year ,color = (year == 2020))) +
+  geom_density(alpha = 0.7,position = "identity") + 
+  xlim(0,200) + 
+  scale_color_discrete(label = c("2019年以前","2020年")) + 
+  labs(x = "単価の前年同月比 (%)",y = "密度",color = "年", title = "各年の前年同月比分布",
+       subtitle = "単価：1月から４月") + 
+  theme(legend.position = "bottom",
+        text = element_text(family = "HiraKakuPro-W3"),
+        plot.background = element_blank())  +
+  facet_wrap(~month)
+
 ```
 
 ### 水揚げ量への影響
@@ -122,6 +136,20 @@ ggplot(dat2 %>% filter(month <= 4),
   theme(legend.position = "bottom",
         text = element_text(family = "HiraKakuPro-W3"),
         plot.background = element_blank()) 
+
+
+# distribution by month
+ggplot(dat2 %>% filter(month <= 4),
+       aes(x = landing_t_rel_year_mon*100, group = year ,color = (year == 2020))) +
+  geom_density(alpha = 0.7,position = "identity") + 
+  xlim(0,200) + 
+  scale_color_discrete(label = c("2019年以前","2020年")) + 
+  labs(x = "水揚げ量の前年同月比 (%)",y = "密度",color = "年", title = "各年の前年同月比分布",
+       subtitle = "水揚げ量: 1月から４月") + 
+  theme(legend.position = "bottom",
+        text = element_text(family = "HiraKakuPro-W3"),
+        plot.background = element_blank()) + 
+  facet_wrap(~month)
 ```
 
 ## 漁港市場別
