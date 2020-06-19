@@ -23,6 +23,7 @@ pacman::p_load(tidyverse,
                lubridate,
                viridis,
                readxl,
+               scales,
                ggridges)
 
 fig_size <- function(width, heigth){
@@ -264,10 +265,11 @@ dat_port3 = dat_port2 %>%
 ```{r, fig.width=8, fig.height=12}
 
 ggplot(dat_port3 %>% filter(month %in% c(1:4)), 
-       aes(x = rev_1000JPY, y = port, col = factor(yr20))) +
+       aes(x = log10(rev_1000JPY), y = port, col = factor(yr20))) +
   geom_point(alpha = 0.7, size = 3) + 
   # xlim(0,200) + 
-  scale_color_discrete(limits = c(1,0),label = c("2020","2019 and before")) +
+  scale_color_discrete(limits = c(1,0),label = c("2020","2019 and before")) + scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x))) +
   labs(title = "漁港別水揚げ高", subtitle= "1-4月",
        x = "漁獲高(千円)", y = "主要漁港", col = "年") +
   theme_bw() +
@@ -276,15 +278,116 @@ ggplot(dat_port3 %>% filter(month %in% c(1:4)),
 
 ```
 
+# 貿易統計
 
-## 研究課題
+
+```{r}
+df_tr = read_csv("trade_stats_fish_gaikyohin_1988_2019_monthly.csv")
+
+df_tr_agg = df_tr %>%
+  mutate(value_MT = ifelse(unit == "KG",value/1000,value)) %>%
+  group_by(year,month,ix,cat01_code,product,type) %>%
+  summarise(across(value_MT, list(sum = ~sum(.x,na.rm = TRUE)))) %>%
+  ungroup() %>%
+  pivot_wider(names_from = type, values_from = value_MT_sum) %>%
+  mutate(unit_value = `金額`/`数量`) %>%
+  mutate(year2020 = ifelse(year == 2020, 1, 0))
+
+```
+
+## 魚介類
+
+調整品を除いた魚介類の輸出入の月別推移。
+
+輸出については、2020年に入ってから金額は横ばいになっているが、
+実際には輸出量が増加している一方で単価は下がり続けている。
+->　仮説：輸出先が変わっている？輸出物が代替している？
+
+輸入は、金額・量ともに低く、量は過去一番で低い値で推移。
+単価は最高ではないが、過去と比較して高い。⇢供給が減っているから高くなっているか？
+
+
+```{r}
+# total value
+ggplot(df_tr_agg %>% filter(cat01_code == "00701000") %>%
+         mutate(`value_sum_金額` = ifelse(`金額` == 0,NA,`金額`)),
+       aes(x = factor(month), y = `value_sum_金額`, col = factor(year2020), group = year)) + 
+  geom_line() + 
+  labs(x = "Month", y = "Total value (1000 JPY)", col = "Year") + 
+  scale_color_discrete(labels = c("1988-2019","2020")) + 
+  facet_wrap(~ix) 
+
+# total quantity
+ggplot(df_tr_agg %>% filter(cat01_code == "00701000") %>%
+         mutate(`数量` = ifelse(`数量` == 0,NA,`数量`)),
+       aes(x = factor(month), y = `数量`, col = factor(year2020), group = year)) + 
+  geom_line() + 
+  labs(x = "Month", y = "Total quantity (MT)", col = "Year") + 
+  scale_color_discrete(labels = c("1988-2019","2020")) + 
+  facet_wrap(~ix) 
+
+# unit value
+ggplot(df_tr_agg %>% filter(cat01_code == "00701000"),
+       aes(x = factor(month), y = unit_value, col = factor(year2020), group = year)) + 
+  geom_line() +
+  labs(x = "Month", y = "Unit value (JPY/kg)", col = "Year") +
+  scale_color_discrete(labels = c("1988-2019","2020")) + 
+  facet_wrap(~ix)
+```
+
+## By products
+
+輸出物は、4月にかけて単価が下がっているものが多いが、はっきりしない。
+輸入物は、価格が高めになっている傾向。
+
+フォーカスすべき魚種を整理して統計品(より詳細)のデータを引っ張ってくるべきか？
+
+### total value
+
+```{r, fig.height=10,fig.width=5}
+
+
+ggplot(df_tr_agg %>% filter(month %in% c(1,2,3,4)) %>%
+         filter(product != "うなぎの稚魚"), 
+       aes(x =log10(`金額`), y =product, col = factor(year2020))) + 
+  geom_point() +
+  scale_color_discrete(labels = c("1988-2019","2020")) + 
+  theme(text = element_text(family = "HiraKakuPro-W3"),
+        legend.position = "bottom") + scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+                labels = trans_format("log10", math_format(10^.x))) + 
+  labs(x = "金額 (1000JPY, 対数)", col = "Year", y = "Product") +
+  facet_grid(month ~ ix)
+  
+```
+
+### unit value 
+"うなぎの稚魚"は単価が高すぎるため、比較から除外
+
+```{r, fig.height=10,fig.width=5}
+
+
+ggplot(df_tr_agg %>% filter(month %in% c(1,2,3,4)) %>%
+         filter(product != "うなぎの稚魚"), 
+       aes(x = unit_value, y =product, col = factor(year2020))) + 
+  geom_point() +
+  scale_color_discrete(labels = c("1988-2019","2020")) + 
+  theme(text = element_text(family = "HiraKakuPro-W3"),
+        legend.position = "bottom") + 
+  labs(x = "Unit value (JPY/kg)", col = "Year", y = "Product") +
+  facet_grid(month ~ ix)
+  
+
+```
+
+
+# 研究課題
 
 - 具体的にどこでどの程度、どんな魚種が影響を受けたか？
 - 何が原因と考えられるか？国内需要の変化？輸出ショック？　
 - 輸入ショックによる価格増加はあるか？
 - 漁獲の多様性とCOVIDショックに対する頑健性に相関はあるか？
 
-### 使えそうなデータ
+## 使えそうなデータ
 
 - 貿易統計(輸出入)
 - 外食需要
