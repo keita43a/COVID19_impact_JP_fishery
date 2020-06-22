@@ -24,13 +24,15 @@ pacman::p_load(tidyverse,
                viridis,
                readxl,
                scales,
-               ggridges)
+               ggridges,
+               gghighlight)
 
 fig_size <- function(width, heigth){
      options(repr.plot.width = width, repr.plot.height = heigth)
 }
 
-dat2 = read_csv("monthly_landing_market_aggregate_201001_202004.csv")
+dat2 = read_csv("monthly_landing_market_aggregate_201001_202004.csv") %>%
+  mutate(yr20 = year == 2020)
 # data is downloaded and compiled in "draft_data_dl.R"
 
 ```
@@ -48,11 +50,29 @@ dat2 = read_csv("monthly_landing_market_aggregate_201001_202004.csv")
 
 ### 価格への影響
 
+#### 月別価格
+
+```{r,fig.height=10,fig.width=5}
+ggplot(dat2 %>% filter(month %in% c(1:4)), aes(y = reorder(species,price_kg,min), x = log10(price_kg))) + 
+  geom_boxplot() + 
+  geom_point(aes(y = reorder(species,price_kg,min), x = log10(price_kg),col=factor(year))) +
+  gghighlight(year == 2020) + 
+  scale_color_manual(name = "Year", values =c("2020" = "red","2019 and before" = "grey")) +
+  labs(x = "単価(対数 円/kg)", y = "魚種")+
+  theme(text = element_text(family = "HiraKakuPro-W3"),
+        legend.position = "bottom") + 
+  facet_wrap(~month) 
+```
+
+
+
+#### 前年同月比
+
 ```{r plot_price}
 # plot price change  
 
 ggplot(dat2 %>% filter(year == 2020),
-       aes(x = price_kg_rel_year_mon*100, y = species, col = factor(month))) + 
+       aes(x = price_kg_rel_year_mon*100, y = reorder(species,-price_kg_rel_year_mon,max), col = factor(month))) + 
   geom_point() + 
   geom_vline(xintercept = 100, col = "red", alpha= 0.7) +
   xlim(0,200) + 
@@ -62,7 +82,7 @@ ggplot(dat2 %>% filter(year == 2020),
         text = element_text(family = "HiraKakuPro-W3"))  
 
 ggplot(dat2 %>% filter(year == 2019 & month <= 4),
-       aes(x = price_kg_rel_year_mon*100, y = species, col = factor(month))) + 
+       aes(x = price_kg_rel_year_mon*100, y = reorder(species,-price_kg_rel_year_mon,max), col = factor(month))) + 
   geom_point() + 
   geom_vline(xintercept = 100, col = "red", alpha = 0.7) +
   xlim(0,200) + 
@@ -100,7 +120,25 @@ ggplot(dat2 %>% filter(month <= 4),
 
 ```
 
+
+
 ### 水揚げ量への影響
+
+
+#### 月別水揚げ量
+
+```{r,fig.height=10,fig.width=5}
+ggplot(dat2 %>% filter(month %in% c(1:4)), aes(y = reorder(species,landing_t,min), x = log10(landing_t))) + 
+  geom_boxplot(col = "grey") + 
+  geom_point(aes(y = reorder(species,landing_t,min), x = log10(landing_t),col=factor(year))) +
+  gghighlight(year == 2020) + 
+  labs(x = "水揚げ量(対数t)", y = "魚種")+
+  theme(text = element_text(family = "HiraKakuPro-W3"),
+        legend.position = "bottom") +
+  facet_wrap(~month) 
+```
+
+#### 前年同月比
 
 ```{r plot_land}
 # landing
@@ -209,6 +247,9 @@ ggplot(dat_port2 %>% filter(month %in% c(1:4)), aes(x = price_kg_rel_year_mon*10
   theme(text = element_text(family = "HiraKakuPro-W3"))
 
 ```
+
+
+
 
 ### 水揚げ量への影響
 
@@ -345,7 +386,6 @@ ggplot(df_tr_agg %>% filter(cat01_code == "00701000"),
 ### total value
 
 ```{r, fig.height=10,fig.width=5}
-
 
 ggplot(df_tr_agg %>% filter(month %in% c(1,2,3,4)) %>%
          filter(product != "うなぎの稚魚"), 
