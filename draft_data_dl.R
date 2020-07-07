@@ -14,7 +14,7 @@ pacman::p_load(tidyverse,
 # use 水産物流通調査 to get landing market data monthly
 # http://www.market.jafic.or.jp/
 
-file_DL = FALSE # TRUE if you need to download file
+file_DL = TRUE # TRUE if you need to download file
 
 # download the file
 if(file_DL){
@@ -23,7 +23,7 @@ for(yr in 2019:2020){ # the data avaialable from 2010
     # convert digits to padded char. (e.g. 4 -> 04)
     mon = str_pad(m,width = 2,pad = 0)
     # file name same as the original file
-    file_name = paste0("01_tukibetu_",yr,"_",mon,".xls")
+    file_name = paste0("./data/suisan_ryutsu/01_tukibetu_",yr,"_",mon,".xls")
     # set URL
     url <- paste0("http://www.market.jafic.or.jp/file/sanchi/",yr,"/",file_name)
     # download the file (excel)
@@ -36,11 +36,11 @@ for(yr in 2019:2020){ # the data avaialable from 2010
 
 for(yr in 2010:2020){ # the data avaialable from 2010
   for(m in 1:12){
-    if(yr == 2020 & m == 5) break
+    if(yr == 2020 & m == 6) break
     # convert digits to padded char. (e.g. 4 -> 04)
     mon = str_pad(m,width = 2,pad = 0)
     # file name same as the original file
-    file_name = paste0("01_tukibetu_",yr,"_",mon,".xls")
+    file_name = paste0("./data/suisan_ryutsu/01_tukibetu_",yr,"_",mon,".xls")
     
     # monthly landing data (aggregated) by major species
     dat_mon = read_excel(file_name, sheet = 1)
@@ -97,7 +97,7 @@ dat2 <- dat1 %>%
 
 # save data
 
-write_csv(dat2, "monthly_landing_market_aggregate_201001_202004.csv")
+write_csv(dat2, "./data/made/monthly_landing_market_aggregate_201001_202005.csv")
 
 
 # ====== data by landing port =======
@@ -108,12 +108,12 @@ write_csv(dat2, "monthly_landing_market_aggregate_201001_202004.csv")
 for(yr in 2010:2020){
   for(m in 1:12){
     
-  if(yr == 2020 & m >= 5) break
+  if(yr == 2020 & m >= 6) break
     
   
   # file name same as the original file
     mon = str_pad(m,width = 2,pad = 0)
-    file_name = paste0("01_tukibetu_",yr,"_",mon,".xls")
+    file_name = paste0("./data/suisan_ryutsu/01_tukibetu_",yr,"_",mon,".xls")
  
   dat_temp = read_excel(file_name, sheet = 2)
 
@@ -170,5 +170,5 @@ dat_port2 = dat_port %>%
   filter(!is.na(port))
   
 
-write_csv(dat_port2, "monthly_landing_market_by_port_201001_202004.csv")
+write_csv(dat_port2, "./data/made/monthly_landing_market_by_port_201001_202005.csv")
   

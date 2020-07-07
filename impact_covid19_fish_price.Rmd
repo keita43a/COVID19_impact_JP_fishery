@@ -25,17 +25,51 @@ pacman::p_load(tidyverse,
                readxl,
                scales,
                ggridges,
-               gghighlight)
+               gghighlight,
+               modelsummary)
 
 fig_size <- function(width, heigth){
      options(repr.plot.width = width, repr.plot.height = heigth)
 }
 
-dat2 = read_csv("monthly_landing_market_aggregate_201001_202004.csv") %>%
+dat2 = read_csv("./data/made/monthly_landing_market_aggregate_201001_202005.csv") %>%
   mutate(yr20 = year == 2020)
 # data is downloaded and compiled in "draft_data_dl.R"
 
 ```
+
+
+# シンプルモデル
+
+今回のCOVID19の流行によって大きく水産物の価格が落ちたと言われている。今回のショックは、マクロ的な需要ショックにある。つまり、大きく需要が落ちたために価格が下がったと考えられるが、その需要サイドでは、料理店などでは大きく需要が落ち込んだ一方で、スーパーマーケットなどの内食需要は上がったと考えられている。水産物価格への影響はどのような要因に分解されるのか？
+
+価格はシンプルに言って需要と供給で決まるが、水産物の需要側と供給側を分解すると以下のように考えることができる。
+
+$$
+Q^D = Q^{retail} + Q^{rest} + Q^{export}
+$$
+$$
+Q^S = Q^{domestic} + Q^{import}
+$$
+つまり、需要側では、リテール（スーパーマーケットなどの小売）、レストランなどの外食、そして輸出される水産物に分けることができる。一方で、供給側では国内で生産される水産物と、輸入によって供給される水産物に分けることができる。
+
+国内の水産物の産地価格はこれらの需要と供給によって決定されるとすると、
+
+$$
+Q^D(p^*) = Q^S(p^*)
+$$
+という価格で決まるとするが、この価格はそれぞれ分解されて需要・供給量の関数であるため、
+
+$$
+p^* = p(Q^D, Q^S) = p(Q^{retail},Q^{rest},Q^{export},Q^{domestic},Q^{import})
+$$
+と表現することができる。すなわち、価格の変化は
+
+$$
+\Delta p = \frac{\Delta p}{\Delta Q^{retail}} +\frac{\Delta p}{\Delta Q^{rest}} +\frac{\Delta p}{\Delta Q^{export}} +\frac{\Delta p}{\Delta Q^{domestic}} +\frac{\Delta p}{\Delta Q^{import}}
+$$
+と分解することができる。
+それぞれは最初の3つが需要サイドであるため、量が増加した場合には価格は増加し残りの2つは下落すると期待される。今回のCOVID-19の影響としては、小売での売上が増加し、レストランでの需要が下落、また輸出入は両方とも外生的なショックとして減少すると考えられるため$\frac{\Delta p}{\Delta Q^{retail}} > 0$, $\frac{\Delta p}{\Delta Q^{rest}} < 0$,$\frac{\Delta p}{\Delta Q^{export}}< 0$,$\frac{\Delta p}{\Delta Q^{export}} > 0$となると期待される。
 
 # データ
 
@@ -52,8 +86,49 @@ dat2 = read_csv("monthly_landing_market_aggregate_201001_202004.csv") %>%
 
 #### 月別価格
 
+```{r, include = FALSE}
+
+# make difference relative to past-10years-mean (monthly) and ratio
+dat2 <- dat2 %>%
+  group_by(month, species) %>%
+  mutate(across(.cols = c(landing_t,price_kg),~mean(.x,rm.na = TRUE),.names = "mon_mean_{col}")) %>%
+  ungroup() %>%
+  mutate(mon_diff_landing_t = landing_t - mon_mean_landing_t,
+         mon_diff_price_kg = price_kg - mon_mean_price_kg,
+         mon_ratio_landing_t = landing_t/mon_mean_landing_t,
+         mon_ratio_price_kg = price_kg/mon_mean_price_kg)
+
+## aggragated price (total value divided by total quantity)
+dat2_agg = dat2 %>%
+  mutate(total_value=landing_t*1000*price_kg) %>%
+  group_by(year,month,date) %>%
+  summarise(total_value = sum(total_value,na.rm = TRUE),
+            total_q = sum(landing_t*1000,na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(agg_price_kg = total_value/total_q) %>%
+  arrange(month,year) %>%
+  group_by(month) %>%
+  mutate(across(.cols = c(total_value,total_q,agg_price_kg), .fns = ~.x/lag(.x,1),.names = "{col}_yronyr")) %>%
+  ungroup() %>%
+  arrange(year,month)
+  
+
+```
+
+```{r}
+# 平均価格
+
+ggplot(dat2_agg, aes(x = date, y = agg_price_kg)) + 
+  geom_point(size = 0.5) +geom_line() +
+  labs(x = "年月",y = "平均単価(総水揚げ高/総水揚げ量)") + 
+  theme_bw() + 
+  theme(text = element_text(family = "HiraKakuPro-W3"))
+
+```
+
+
 ```{r,fig.height=10,fig.width=5}
-ggplot(dat2 %>% filter(month %in% c(1:4)), aes(y = reorder(species,price_kg,min), x = log10(price_kg))) + 
+ggplot(dat2 %>% filter(month %in% c(1:5)), aes(y = reorder(species,price_kg,min), x = log10(price_kg))) + 
   geom_boxplot() + 
   geom_point(aes(y = reorder(species,price_kg,min), x = log10(price_kg),col=factor(year))) +
   gghighlight(year == 2020) + 
@@ -64,6 +139,11 @@ ggplot(dat2 %>% filter(month %in% c(1:4)), aes(y = reorder(species,price_kg,min)
   facet_wrap(~month) 
 ```
 
+```{r}
+ggplot(dat2, aes(x = date, y = mon_ratio_price_kg,group = date)) + 
+  geom_boxplot(size = 0.5) + 
+  ylim(0,2)
+```
 
 
 #### 前年同月比
@@ -81,7 +161,7 @@ ggplot(dat2 %>% filter(year == 2020),
   theme(legend.position = "bottom",
         text = element_text(family = "HiraKakuPro-W3"))  
 
-ggplot(dat2 %>% filter(year == 2019 & month <= 4),
+ggplot(dat2 %>% filter(year == 2019 & month <= 5),
        aes(x = price_kg_rel_year_mon*100, y = reorder(species,-price_kg_rel_year_mon,max), col = factor(month))) + 
   geom_point() + 
   geom_vline(xintercept = 100, col = "red", alpha = 0.7) +
@@ -93,26 +173,26 @@ ggplot(dat2 %>% filter(year == 2019 & month <= 4),
         plot.background = element_blank())  
 
 # distribution
-ggplot(dat2 %>% filter(month <= 4),
+ggplot(dat2 %>% filter(month <= 5),
        aes(x = price_kg_rel_year_mon*100, group = year ,color = (year == 2020))) +
   geom_density(alpha = 0.7,position = "identity") + 
   xlim(0,200) + 
   scale_color_discrete(label = c("2019年以前","2020年")) + 
   labs(x = "単価の前年同月比 (%)",y = "密度",color = "年", title = "各年の前年同月比分布",
-       subtitle = "単価：1月から４月") + 
+       subtitle = "単価：1月から5月") + 
   theme(legend.position = "bottom",
         text = element_text(family = "HiraKakuPro-W3"),
         plot.background = element_blank())  
 
 
 # distribution
-ggplot(dat2 %>% filter(month <= 4),
+ggplot(dat2 %>% filter(month <= 5),
        aes(x = price_kg_rel_year_mon*100, group = year ,color = (year == 2020))) +
   geom_density(alpha = 0.7,position = "identity") + 
   xlim(0,200) + 
   scale_color_discrete(label = c("2019年以前","2020年")) + 
   labs(x = "単価の前年同月比 (%)",y = "密度",color = "年", title = "各年の前年同月比分布",
-       subtitle = "単価：1月から４月") + 
+       subtitle = "単価：1月から5月") + 
   theme(legend.position = "bottom",
         text = element_text(family = "HiraKakuPro-W3"),
         plot.background = element_blank())  +
@@ -128,7 +208,7 @@ ggplot(dat2 %>% filter(month <= 4),
 #### 月別水揚げ量
 
 ```{r,fig.height=10,fig.width=5}
-ggplot(dat2 %>% filter(month %in% c(1:4)), aes(y = reorder(species,landing_t,min), x = log10(landing_t))) + 
+ggplot(dat2 %>% filter(month %in% c(1:5)), aes(y = reorder(species,landing_t,min), x = log10(landing_t))) + 
   geom_boxplot(col = "grey") + 
   geom_point(aes(y = reorder(species,landing_t,min), x = log10(landing_t),col=factor(year))) +
   gghighlight(year == 2020) + 
@@ -332,7 +412,13 @@ df_tr_agg = df_tr %>%
   ungroup() %>%
   pivot_wider(names_from = type, values_from = value_MT_sum) %>%
   mutate(unit_value = `金額`/`数量`) %>%
-  mutate(year2020 = ifelse(year == 2020, 1, 0))
+  mutate(year2020 = ifelse(year == 2020, 1, 0)) %>%
+  # make year-on-year (前年同月比)
+  arrange(ix,cat01_code,month,year) %>%
+  group_by(ix,cat01_code,month) %>%
+  mutate(across(.cols = c(`数量`,`金額`,unit_value), .fns = ~.x/lag(.x,1),.names = "{col}_yronyr")) %>%
+  ungroup() %>%
+  arrange(cat01_code,ix,year,month)
 
 ```
 
@@ -418,6 +504,141 @@ ggplot(df_tr_agg %>% filter(month %in% c(1,2,3,4)) %>%
   
 
 ```
+
+# 小売データ
+
+スーパーマーケットにおけるデータ。
+使用したデータは「統計で見るスーパーマーケット」の販売統計調査結果（月次）
+http://www.j-sosm.jp/dl/index.html#sales
+
+```{r}
+dat_super = read_csv("./data/made/supermarket_monthly_2010_1_2020_5.csv")
+dat_super_long = read_csv("./data/made/supermarket_monthly_2010_1_2020_5_long.csv")
+
+# compiled the data from raw data in "data_make_supermarkets.R"
+```
+
+生鮮品はCOVID19の期間に大きく伸ばしているが、青果と畜産物に比べて水産物は落ち込んでいる。また、意外なことは惣菜の前年同月比が４,５月に落ちていることである。在宅期間が長くなり、料理などに時間をかけるようになった結果か。
+
+```{r}
+# test plot
+
+ggplot(dat_super_long %>% filter(break_down %in% c("青果","水産","畜産","惣菜")),
+       aes(x= date,y = rel_year_mon, col = break_down)) + 
+  geom_point(size = 0.6) + geom_line() + 
+  geom_hline(yintercept = 1) +
+  geom_vline(col = "red",alpha = 0.5,xintercept = as.Date("2020-01-01")) +
+  labs(x ="年月", y = "前年同月比",col = "凡例",
+       title = "スーパーの生鮮3品目の売上前年同月比",
+       caption = "「販売統計調査」（統計・データでみるスーパーマーケット）\n（http://www.j-sosm.jp/dl/index.html#sales）を加工して作成") +
+  theme_bw() +
+  theme(text = element_text("HiraKakuPro-W3"),
+        legend.position = "bottom")
+```
+
+# 外食データ
+
+外食のデータは、一般社団法人日本フードサービス協会の「データからみる外食産業」で提供されているデータを使用した。月次のデータで、サンプルの各社からのアンケートの回答を元に作成されている。
+http://www.jfnet.or.jp/data/data_c.html
+
+```{r}
+
+dat_rest = read_csv("./data/made/food_service_monthly_2009_1_2020_5.csv")
+
+# compiled the data from raw data in "data_make_restaurants.R"
+```
+
+```{r}
+# test plot
+
+ggplot(dat_rest %>% filter(`タイプ` =="合計"),
+       aes(x= date,y = `売上高`, col = `業態`)) + 
+  geom_point(size = 0.6) + geom_line() + 
+  geom_hline(yintercept = 1) +
+  geom_vline(col = "red",alpha = 0.5,xintercept = as.Date("2020-01-01")) +
+  xlim(as.Date("2016-01-01"),as.Date("2020-06-01")) +
+  labs(x ="年月", y = "前年同月比",col = "凡例",
+       title = "外食産業の売上前年同月比",
+       caption = "「JF外食産業市場動向調査」（一般社団法人日本フードサービス協会）\n（http://www.jfnet.or.jp/data/data_c.html）を加工して作成") +
+  theme_bw() +
+  theme(text = element_text("HiraKakuPro-W3"),
+        legend.position = "bottom")
+```
+
+
+# 分析
+
+シンプルモデルで示した価格変化の分割式：
+$$
+\Delta p = \frac{\Delta p}{\Delta Q^{retail}} +\frac{\Delta p}{\Delta Q^{rest}} +\frac{\Delta p}{\Delta Q^{export}} +\frac{\Delta p}{\Delta Q^{domestic}} +\frac{\Delta p}{\Delta Q^{import}}
+$$
+これを現状あるデータにあてはめると以下のように定式化される。
+
+$$
+産地価格変化 =　小売売上変化 + 外食売上変化 + 輸出量変化 + 取引量変化 + 輸入量変化 
+$$
+それぞれの変化は、一部のデータが前年同月比しか得られないため、すべて前年同月比に直して推定した。
+
+現時点では、産地の価格は全ての魚種を含めた平均価格(総売上÷総量)を用いた。また、小売売上変化はスーパーのデータより、水産物の前年同月比を使い、外食は外食全体の売上変化を用いた。輸出入はそれぞれ魚介類カテゴリーの総量を用いた。産地の取引量全体を取引量として用いた。
+
+```{r}
+
+df_tr_all = df_tr_agg %>%
+  filter(product == "魚介類") %>%
+  pivot_wider(id_cols = c(year,month,cat01_code,product),
+              names_from = "ix",
+              values_from = ends_with("yronyr"))
+
+# merge whole data
+dat_all = dat2_agg %>%
+  left_join(df_tr_all, by = c("year","month")) %>%
+  left_join(dat_super, by = c("year","month" = "mon")) %>%
+  left_join(dat_rest %>% filter(`業態` == "全体") ,by = c("year","month")) %>%
+  mutate(across(.cols = c(contains("数量"),`水産`,`売上高`),
+                .fns = list(lag = ~lag(.,1),
+                            lead = ~lead(.,1))))
+
+# test run
+reg1 = lm(agg_price_kg_yronyr ~ 0 + total_q_yronyr + 数量_yronyr_export + 数量_yronyr_import + 水産 + 売上高, dat_all %>% filter(year < 2020))
+
+summary(reg1)
+
+# test run
+reg1_lag = lm(agg_price_kg_yronyr ~ 0 + total_q_yronyr + 数量_yronyr_export_lag + 数量_yronyr_import_lag + 水産_lag + 売上高_lag, dat_all %>% filter(year < 2020))
+
+summary(reg1_lag)
+
+# test run
+reg1_lead = lm(agg_price_kg_yronyr ~ total_q_yronyr + 数量_yronyr_export_lead + 数量_yronyr_import_lead + 水産_lead + 売上高_lead, dat_all %>% filter(year < 2020))
+
+summary(reg1_lead)
+
+```
+
+### Simple Regression
+
+```{r, results='asis'}
+msummary(list(reg1), coef_map = c("total_q_yronyr"=" 産地取引量(前年同月比)","売上高"= "外食(前年同月比)","数量_yronyr_export"="輸出量(前年同月比)","数量_yronyr_import"="輸入量(前年同月比)", "水産"="スーパー水産物売上(前年同月比)"))
+
+
+```
+
+### 説明変数ラグ
+輸出入や小売の影響は遅れて出るか？
+```{r}
+msummary(list(reg1_lag),
+         coef_map = c("total_q_yronyr"=" 産地取引量(前年同月比)","売上高_lag"= "外食(前年同月比, 1月ラグ)","数量_yronyr_export_lag"="輸出量(前年同月比, 1月ラグ)","数量_yronyr_import_lag"="輸入量(前年同月比, 1月ラグ)", "水産_lag"="スーパー水産物売上(前年同月比, 1月ラグ)"))
+```
+
+### 説明変数リード
+輸出入や小売は下流なので、産地市場への影響は先行して現れるか？
+
+```{r}
+msummary(list(reg1_lead),
+         coef_map = c("total_q_yronyr"=" 産地取引量(前年同月比)","売上高_lead"= "外食(前年同月比, 1月リード)","数量_yronyr_export_lead"="輸出量(前年同月比, 1月リード)","数量_yronyr_import_lead"="輸入量(前年同月比, 1月リード)", "水産_lead"="スーパー水産物売上(前年同月比, 1月リード)"))
+```
+
+全体として、データが全国、月毎であることや魚種を総計しているためバリエーションがないことや、様々な効果が打ち消し合っていると考えられ、有用な結果が得られてない。ある程度メジャーな魚種に絞って、魚種ごとのデータを用いるべきか。
 
 
 # 研究課題
